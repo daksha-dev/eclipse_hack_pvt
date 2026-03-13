@@ -406,107 +406,75 @@ def get_drift_notifications(results: Optional[dict]) -> List[Dict[str, Any]]:
 
 
 def render_notification_bell(notifications: List[Dict[str, Any]]) -> None:
-    """
-    Render the notification bell icon in the header row.
-    A red pulsing bell with a badge count appears when drift is detected.
-    Clicking it toggles the notification panel below the header.
-    """
+    """Animated pill bell. Click opens full alerts panel; click again closes it."""
     count = len(notifications)
     has_alerts = count > 0
+    is_open = st.session_state.get("notif_open", False)
 
-    # Build bell HTML
     if has_alerts:
-        bell_html = f"""
-        <div class="bell-wrapper">
-            <div class="bell-btn-active">
-                🔔
-                <span class="bell-badge">{count}</span>
-                <span class="bell-label-active">DRIFT DETECTED</span>
-            </div>
+        st.markdown(f"""
+        <style>
+        .nb-pill {{
+            display:inline-flex;align-items:center;gap:6px;
+            padding:6px 12px 6px 9px;
+            background:rgba(231,76,60,0.10);
+            border:1px solid rgba(231,76,60,0.40);
+            border-radius:999px;pointer-events:none;margin-bottom:4px;
+        }}
+        .nb-dot {{
+            width:6px;height:6px;border-radius:50%;background:#E74C3C;
+            animation:nbPulse 1.4s ease-in-out infinite;
+        }}
+        .nb-bell {{ animation:nbSwing 3s ease-in-out infinite;transform-origin:50% 3px; }}
+        @keyframes nbPulse{{0%,100%{{box-shadow:0 0 0 0 rgba(231,76,60,.5);}}60%{{box-shadow:0 0 0 5px rgba(231,76,60,0);}}}}
+        @keyframes nbSwing{{0%,100%{{transform:rotate(0);}}6%{{transform:rotate(15deg);}}12%{{transform:rotate(-12deg);}}18%{{transform:rotate(8deg);}}24%{{transform:rotate(0);}}}}
+        </style>
+        <div class="nb-pill">
+            <div class="nb-dot"></div>
+            <svg class="nb-bell" width="15" height="15" viewBox="0 0 24 24" fill="none">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+                      stroke="#E74C3C" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"
+                      stroke="#E74C3C" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span style="font-size:.72rem;font-weight:800;color:#E74C3C;">
+                {count} alert{'s' if count != 1 else ''}
+            </span>
         </div>
-        """
+        """, unsafe_allow_html=True)
+
+        btn_label = "✕  Close Alerts" if is_open else f"🔔 {count} Drift Alerts"
+        btn_type  = "secondary" if is_open else "primary"
+        if st.button(btn_label, key="bell_toggle", type=btn_type, use_container_width=True):
+            st.session_state["notif_open"] = not is_open
+            st.rerun()
     else:
-        bell_html = """
-        <div class="bell-wrapper">
-            <div class="bell-btn-quiet">
-                🔕
-                <span class="bell-label-quiet">All Clear</span>
-            </div>
+        st.markdown("""
+        <div style="display:inline-flex;align-items:center;gap:6px;
+                    padding:6px 12px;border-radius:999px;
+                    border:1px solid rgba(255,255,255,0.07);opacity:.4;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+                      stroke="#666" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"
+                      stroke="#666" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span style="font-size:.72rem;color:#555;font-weight:600;">all clear</span>
         </div>
-        """
-
-    st.markdown(bell_html, unsafe_allow_html=True)
-
-    # Toggle button (invisible label trick — we use a real st.button under the HTML)
-    btn_label = f"🔔 {count} Drift Alert{'s' if count != 1 else ''}" if has_alerts else "🔕 No Alerts"
-    if st.button(
-        btn_label,
-        key="notif_bell_toggle",
-        type="primary" if has_alerts else "secondary",
-        use_container_width=True,
-    ):
-        current = st.session_state.get("show_notifications", False)
-        st.session_state["show_notifications"] = not current
+        """, unsafe_allow_html=True)
 
 
-def render_notification_panel(notifications: List[Dict[str, Any]]) -> None:
+def render_alerts_panel(notifications: List[Dict[str, Any]]) -> None:
     """
-    Render the expandable notification panel beneath the header.
-    Only shown when st.session_state['show_notifications'] is True.
-
-    Each element is rendered with its own st.markdown call to avoid
-    Streamlit silently dropping large HTML blocks.
+    Full-width alerts panel — shown instead of dashboard when notif_open=True.
+    Each drifting device gets a clean card row.
     """
-    if not st.session_state.get("show_notifications", False):
-        return
-
-    sev_colors = {
-        "CRITICAL": COLORS["critical"],
-        "HIGH":     COLORS["high"],
-        "WARNING":  COLORS["warning"],
-        "NORMAL":   COLORS["normal"],
-    }
-    sev_icons = {
-        "CRITICAL": "🔴", "HIGH": "🔶", "WARNING": "⚠️", "NORMAL": "✅",
-    }
-    border_colors = {
-        "CRITICAL": "#E74C3C",
-        "HIGH":     "#FF6B35",
-        "WARNING":  "#FFB81C",
-        "NORMAL":   "#00B050",
-    }
-    bg_colors = {
-        "CRITICAL": "rgba(231,76,60,0.07)",
-        "HIGH":     "rgba(255,107,53,0.07)",
-        "WARNING":  "rgba(255,184,28,0.06)",
-        "NORMAL":   "rgba(0,176,80,0.05)",
-    }
+    sev_colors  = {"CRITICAL": "#E74C3C", "HIGH": "#FF6B35", "WARNING": "#FFB81C", "NORMAL": "#00B050"}
+    bg_colors   = {"CRITICAL": "rgba(231,76,60,0.07)", "HIGH": "rgba(255,107,53,0.07)",
+                   "WARNING": "rgba(255,184,28,0.05)", "NORMAL": "rgba(0,176,80,0.05)"}
 
     count = len(notifications)
-    ts = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
-
-    # ── Panel open wrapper ────────────────────────────────────────
-    st.markdown(
-        '<div class="notif-panel" style="padding-bottom:0.4rem;">',
-        unsafe_allow_html=True,
-    )
-
-    # ── Panel header ──────────────────────────────────────────────
-    if count == 0:
-        st.markdown(
-            f"""
-            <div class="notif-panel-header">
-                <div>
-                    <div class="notif-panel-title">🔔 Drift Notifications</div>
-                    <div class="notif-panel-sub">Last checked {ts}</div>
-                </div>
-            </div>
-            <div class="notif-empty">✅ No drift detected across all monitored devices.</div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-        return
+    ts    = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
 
     critical_count = sum(1 for n in notifications if n["severity"] == "CRITICAL")
     high_count     = sum(1 for n in notifications if n["severity"] == "HIGH")
@@ -514,93 +482,77 @@ def render_notification_panel(notifications: List[Dict[str, Any]]) -> None:
 
     summary_parts = []
     if critical_count:
-        summary_parts.append(
-            f'<span style="color:#E74C3C;font-weight:700;">{critical_count} critical</span>'
-        )
+        summary_parts.append(f'<span style="color:#E74C3C;font-weight:700;">{critical_count} critical</span>')
     if high_count:
-        summary_parts.append(
-            f'<span style="color:#FF6B35;font-weight:700;">{high_count} high</span>'
-        )
+        summary_parts.append(f'<span style="color:#FF6B35;font-weight:700;">{high_count} high</span>')
     if warning_count:
-        summary_parts.append(
-            f'<span style="color:#FFB81C;font-weight:700;">{warning_count} warning</span>'
-        )
-    summary_str = " · ".join(summary_parts)
+        summary_parts.append(f'<span style="color:#FFB81C;font-weight:700;">{warning_count} warning</span>')
+    summary_html = " &nbsp;·&nbsp; ".join(summary_parts)
 
-    st.markdown(
-        f"""
-        <div class="notif-panel-header">
-            <div>
-                <div class="notif-panel-title">
-                    🔔 {count} Drift Alert{"s" if count != 1 else ""}
+    # ── Header row ────────────────────────────────────────────────
+    st.markdown(f"""
+    <div style="display:flex;align-items:baseline;justify-content:space-between;
+                margin-bottom:1rem;padding-bottom:0.6rem;
+                border-bottom:1px solid rgba(255,255,255,0.07);">
+        <div>
+            <span style="font-size:1.25rem;font-weight:800;color:#FAFAFA;">
+                🔔 {count} Drift Alert{'s' if count != 1 else ''}
+            </span>
+            &nbsp;&nbsp;
+            <span style="font-size:0.82rem;color:#8B8D97;">{summary_html}</span>
+        </div>
+        <span style="font-size:0.75rem;color:#555;">{ts}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── One card per device — each its own st.markdown call ───────
+    for n in notifications:
+        sev    = n["severity"]
+        color  = sev_colors.get(sev, "#E74C3C")
+        bg     = bg_colors.get(sev, "rgba(231,76,60,0.07)")
+
+        signals_str = " · ".join(f"<b>{s}</b>" for s in n["signals_fired"]) if n["signals_fired"] else "—"
+        drift_tag = (
+            '<span style="color:#E74C3C;font-weight:700;font-size:0.7rem;'
+            'background:rgba(231,76,60,0.15);padding:1px 7px;border-radius:4px;">● DRIFT</span>'
+            if n["drift_confirmed"] else
+            '<span style="color:#FFB81C;font-weight:700;font-size:0.7rem;'
+            'background:rgba(255,184,28,0.15);padding:1px 7px;border-radius:4px;">⚠ LOW TRUST</span>'
+        )
+
+        st.markdown(f"""
+        <div style="display:flex;align-items:center;justify-content:space-between;
+                    background:{bg};
+                    border:1px solid {color}33;border-left:3px solid {color};
+                    border-radius:10px;padding:0.65rem 1rem;margin-bottom:0.4rem;">
+            <div style="display:flex;align-items:center;gap:10px;flex:1.4;min-width:0;">
+                <span style="width:8px;height:8px;border-radius:50%;flex-shrink:0;
+                             background:{color};box-shadow:0 0 6px {color};
+                             display:inline-block;"></span>
+                <div>
+                    <span style="font-weight:700;font-size:0.88rem;color:#FAFAFA;">
+                        {n['device_name']}
+                    </span>
+                    &nbsp;{drift_tag}
+                    <div style="font-size:0.68rem;color:#8B8D97;margin-top:1px;font-family:monospace;">
+                        {n['device_id']} &nbsp;·&nbsp; Window {n['window']}
+                    </div>
                 </div>
-                <div class="notif-panel-sub">{summary_str} &nbsp;·&nbsp; {ts}</div>
+            </div>
+            <div style="flex:2;padding:0 1.2rem;font-size:0.74rem;color:#8B8D97;line-height:1.6;">
+                Signals: {signals_str} &nbsp;·&nbsp;
+                Factor: <b style="color:#ccc;">{n['drift_factor']:.2f}x</b> &nbsp;·&nbsp;
+                Anomaly: <b style="color:#ccc;">{n['anomaly_score']:.3f}</b> &nbsp;·&nbsp;
+                Drift windows: <b style="color:#ccc;">{n['total_drift_windows']}</b>
+            </div>
+            <div style="text-align:right;min-width:52px;">
+                <div style="font-size:1.35rem;font-weight:800;color:{color};line-height:1;">
+                    {n['trust_score']:.0f}
+                </div>
+                <div style="font-size:0.62rem;color:#8B8D97;">/ 100</div>
             </div>
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # ── One st.markdown per notification item ─────────────────────
-    for n in notifications:
-        severity   = n["severity"]
-        color      = sev_colors.get(severity, COLORS["critical"])
-        icon       = sev_icons.get(severity, "❓")
-        border_clr = border_colors.get(severity, "#E74C3C")
-        bg_clr     = bg_colors.get(severity, "rgba(231,76,60,0.07)")
-
-        signals_str = (
-            " · ".join(f"<b>{s}</b>" for s in n["signals_fired"])
-            if n["signals_fired"] else "—"
-        )
-        drift_tag = (
-            '<span style="color:#E74C3C;font-weight:700;font-size:0.75rem;">● DRIFT</span>'
-            if n["drift_confirmed"] else
-            '<span style="color:#FFB81C;font-weight:700;font-size:0.75rem;">⚠ LOW TRUST</span>'
-        )
-
-        st.markdown(
-            f"""
-            <div style="
-                background:{bg_clr};
-                border:1px solid {border_clr}44;
-                border-left:3px solid {border_clr};
-                border-radius:10px;
-                padding:0.75rem 1rem;
-                margin-bottom:0.55rem;
-            ">
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                    <div style="flex:1;min-width:0;">
-                        <span style="font-weight:700;font-size:0.92rem;color:#FAFAFA;">
-                            {icon} {n['device_name']}
-                        </span>
-                        &nbsp;{drift_tag}<br>
-                        <span style="font-size:0.72rem;color:#8B8D97;font-family:monospace;">
-                            {n['device_id']} · Window {n['window']}
-                        </span>
-                        <div style="font-size:0.78rem;color:#8B8D97;margin-top:0.25rem;">
-                            Signals: {signals_str} &nbsp;|&nbsp;
-                            Drift Factor: <b style="color:#FAFAFA;">{n['drift_factor']:.2f}x</b>
-                            &nbsp;|&nbsp;
-                            Anomaly: <b style="color:#FAFAFA;">{n['anomaly_score']:.3f}</b>
-                            &nbsp;|&nbsp;
-                            Drift windows: <b style="color:#FAFAFA;">{n['total_drift_windows']}</b>
-                        </div>
-                    </div>
-                    <div style="text-align:right;min-width:60px;padding-left:0.75rem;">
-                        <span style="font-size:1.2rem;font-weight:800;color:{color};">
-                            {n['trust_score']:.0f}
-                        </span>
-                        <div style="font-size:0.68rem;color:#8B8D97;">/ 100</div>
-                    </div>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    # ── Panel close wrapper ───────────────────────────────────────
-    st.markdown("</div>", unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -657,7 +609,7 @@ def build_device_dataframe(results: dict) -> pd.DataFrame:
         severity = dev.get("severity", "UNKNOWN")
         score = dev.get("final_score", 0)
         rows.append({
-            "Device IP": dev_id,
+            "Device IP": get_device_name(dev_id),
             "Score": score,
             "Severity": severity,
             "Min Score": dev.get("min_score", score),
@@ -685,7 +637,6 @@ def render_header(notifications: List[Dict[str, Any]]) -> None:
     """Render the dashboard header with title, timestamp, and notification bell."""
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    # Two-column layout: title on left, bell on right
     h_col_left, h_col_right = st.columns([5, 1])
 
     with h_col_left:
@@ -693,18 +644,14 @@ def render_header(notifications: List[Dict[str, Any]]) -> None:
         <div class="dashboard-header">
             <p class="dashboard-title">🔒 IoT Trust & Drift Analytics</p>
             <p class="dashboard-subtitle">
-                Real-Time Device Trustworthiness Monitoring &nbsp;·&nbsp;
-                Dataset Replay Mode &nbsp;·&nbsp; {now}
+                Real-Time Device Trustworthiness Monitoring &nbsp;·&nbsp; {now}
             </p>
         </div>
         """, unsafe_allow_html=True)
 
     with h_col_right:
-        st.markdown("<div style='height:0.6rem;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='height:1.1rem;'></div>", unsafe_allow_html=True)
         render_notification_bell(notifications)
-
-    # Notification panel spans full width, right below header
-    render_notification_panel(notifications)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -803,7 +750,7 @@ def render_trust_timeline(
         fig.add_trace(go.Scatter(
             x=windows, y=scores,
             mode="lines",
-            name=dev_id,
+            name=get_device_name(dev_id),
             line=dict(width=2.5, color=color),
             hovertemplate=(
                 f"<b>{dev_id}</b><br>"
@@ -1397,7 +1344,7 @@ def render_drift_overview(results: dict, selected_devices: List[str]) -> None:
         chi_windows = sum(1 for h in history if h.get("chi_drift", False))
         disagree_windows = sum(1 for h in history if h.get("disagree_drift", False))
         rows.append({
-            "Device": dev_id,
+            "Device": get_device_name(dev_id),
             "ADWIN": "🔴" if last.get("adwin_drift") else "🟢",
             "Chi²": "🔴" if last.get("chi_drift") else "🟢",
             "Disagree": "🔴" if last.get("disagree_drift") else "🟢",
@@ -1603,19 +1550,6 @@ def render_sidebar(config: dict, results: Optional[dict]) -> dict:
         st.markdown("---")
         st.markdown("## 🎛️ Controls")
 
-        # Mode selector
-        mode = st.radio(
-            "Mode", ["Dataset Replay", "Live Hardware"],
-            index=0, horizontal=True,
-            help="Dataset Replay analyses pre-loaded CSV data. "
-                 "Live Hardware connects to an ESP32 device.",
-        )
-        selections["mode"] = mode
-
-        if mode == "Live Hardware":
-            st.warning("⚡ Live mode requires a running hardware bridge. "
-                       "Falling back to replay if unavailable.")
-
         # Device filter
         if results:
             all_devices = sorted(results.get("devices", {}).keys())
@@ -1729,8 +1663,8 @@ def main() -> None:
         st.session_state["show_detail"] = False
     if "show_evidence" not in st.session_state:
         st.session_state["show_evidence"] = False
-    if "show_notifications" not in st.session_state:
-        st.session_state["show_notifications"] = False
+    if "notif_open" not in st.session_state:
+        st.session_state["notif_open"] = False
 
     # ── No data fallback ─────────────────────────────────────────
     if results is None:
@@ -1740,12 +1674,6 @@ def main() -> None:
 
     # ── Build notifications early (needed for header) ────────────
     notifications = get_drift_notifications(results)
-
-    # Auto-open the panel on first load if there are active alerts
-    if "notifications_auto_opened" not in st.session_state:
-        st.session_state["notifications_auto_opened"] = True
-        if notifications:
-            st.session_state["show_notifications"] = True
 
     # ── Sidebar ──────────────────────────────────────────────────
     selections = render_sidebar(config, results)
@@ -1774,6 +1702,11 @@ def main() -> None:
     render_metrics_row(summary, device_df)
 
     st.markdown("")  # spacer
+
+    # ── If alerts panel is open, show it instead of tabs ─────────
+    if st.session_state.get("notif_open", False):
+        render_alerts_panel(notifications)
+        return  # skip rendering the rest of the dashboard
 
     # ── Tabs for main content ────────────────────────────────────
     tab_overview, tab_devices, tab_evidence, tab_advanced, tab_live = st.tabs([
@@ -1897,7 +1830,8 @@ def main() -> None:
             chart_placeholder = st.empty()
             metrics_placeholder = st.empty()
             status_placeholder = st.empty()
-
+            live_alert_placeholder = st.empty()
+            
             palette = px.colors.qualitative.Set2 + px.colors.qualitative.Pastel1
             device_colors = {
                 d: palette[i % len(palette)]
@@ -1906,6 +1840,22 @@ def main() -> None:
 
             for device_id, window in timeline:
                 live_histories[device_id].append(window)
+                
+                live_alert_count = 0
+                live_critical = 0
+                live_high = 0
+                live_warning = 0
+                for d, hist in live_histories.items():
+                    if not hist:
+                        continue
+                    last_w = hist[-1]
+                    score = last_w.get("trust_score", 100)
+                    sev = last_w.get("severity", "NORMAL")
+                    if last_w.get("drift_confirmed") or score < 70:
+                        live_alert_count += 1
+                        if sev == "CRITICAL":   live_critical += 1
+                        elif sev == "HIGH":     live_high += 1
+                        elif sev == "WARNING":  live_warning += 1
 
                 # Rebuild chart
                 fig_live = go.Figure()
@@ -1949,6 +1899,39 @@ def main() -> None:
 
                 with chart_placeholder.container():
                     st.plotly_chart(fig_live, use_container_width=True)
+                
+                with live_alert_placeholder.container():
+                    if live_alert_count > 0:
+                        parts = []
+                        if live_critical:
+                            parts.append(f'<span style="color:#E74C3C;font-weight:800;">'
+                                        f'🔴 {live_critical} Critical</span>')
+                        if live_high:
+                            parts.append(f'<span style="color:#FF6B35;font-weight:800;">'
+                                        f'🔶 {live_high} High</span>')
+                        if live_warning:
+                            parts.append(f'<span style="color:#FFB81C;font-weight:800;">'
+                                        f'⚠️ {live_warning} Warning</span>')
+                        summary = " &nbsp;·&nbsp; ".join(parts)
+                        st.markdown(
+                            f'<div style="background:rgba(231,76,60,0.08);border:1px solid '
+                            f'rgba(231,76,60,0.35);border-radius:10px;padding:10px 16px;'
+                            f'margin-bottom:8px;display:flex;align-items:center;gap:12px;">'
+                            f'<span style="font-size:1.1rem;font-weight:800;color:#E74C3C;">'
+                            f'🔔 {live_alert_count} Live Alert'
+                            f'{"s" if live_alert_count != 1 else ""}</span>'
+                            f'&nbsp;&nbsp;{summary}</div>',
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown(
+                            '<div style="background:rgba(0,176,80,0.07);border:1px solid '
+                            'rgba(0,176,80,0.25);border-radius:10px;padding:10px 16px;'
+                            'margin-bottom:8px;">'
+                            '<span style="color:#00B050;font-weight:700;">✅ All devices normal</span>'
+                            '</div>',
+                            unsafe_allow_html=True,
+                        )
 
                 # Update per-device score cards
                 with metrics_placeholder.container():
