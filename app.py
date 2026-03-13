@@ -3,7 +3,8 @@ login.py — Night's Watch
 Run: streamlit run login.py
 """
 
-import os
+import base64
+import json as _json
 import streamlit as st
 
 st.set_page_config(
@@ -13,7 +14,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Hide sidebar and Streamlit chrome
 st.markdown("""
 <style>
 [data-testid="stSidebar"]        { display: none !important; }
@@ -27,8 +27,6 @@ html, body, [class*="css"] {
     background: #04070f !important;
     color: #e2e8f0;
 }
-
-/* Animated grid */
 body::before {
     content: '';
     position: fixed;
@@ -45,8 +43,6 @@ body::before {
     from { background-position: 0 0; }
     to   { background-position: 44px 44px; }
 }
-
-/* Glow blobs */
 body::after {
     content: '';
     position: fixed;
@@ -58,11 +54,9 @@ body::after {
     animation: pulse 8s ease-in-out infinite alternate;
 }
 @keyframes pulse {
-    from { transform: scale(1);    opacity: 0.6; }
-    to   { transform: scale(1.2);  opacity: 1;   }
+    from { transform: scale(1);   opacity: 0.6; }
+    to   { transform: scale(1.2); opacity: 1;   }
 }
-
-/* Card */
 .login-card {
     position: relative;
     z-index: 10;
@@ -78,7 +72,6 @@ body::after {
     from { opacity: 0; transform: translateY(20px); }
     to   { opacity: 1; transform: translateY(0);    }
 }
-
 .brand {
     font-family: 'Syne', sans-serif;
     font-size: 1.85rem;
@@ -93,89 +86,21 @@ body::after {
     margin-bottom: 36px;
     letter-spacing: 0.02em;
 }
-
-/* Inputs */
-.stTextInput label {
-    font-size: 0.72rem !important;
-    font-weight: 600 !important;
-    color: #3d5280 !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.08em !important;
-}
-.stTextInput > div > div > input {
-    background: #060b18 !important;
-    border: 1px solid #162033 !important;
-    border-radius: 10px !important;
-    color: #e2e8f0 !important;
-    font-family: 'DM Sans', sans-serif !important;
-    padding: 12px 14px !important;
-    transition: border-color 0.2s !important;
-}
-.stTextInput > div > div > input:focus {
-    border-color: #3872e0 !important;
-    box-shadow: 0 0 0 3px rgba(56,114,224,0.12) !important;
-}
-
-/* Submit button */
-.stFormSubmitButton > button {
-    width: 100% !important;
-    background: linear-gradient(135deg, #1e40af, #2563eb) !important;
-    border: none !important;
-    border-radius: 11px !important;
-    color: #fff !important;
-    font-family: 'DM Sans', sans-serif !important;
-    font-size: 0.92rem !important;
-    font-weight: 600 !important;
-    padding: 13px !important;
-    margin-top: 8px !important;
-    box-shadow: 0 4px 18px rgba(37,99,235,0.35) !important;
-    transition: all 0.2s !important;
-    letter-spacing: 0.01em !important;
-}
-.stFormSubmitButton > button:hover {
-    transform: translateY(-1px) !important;
-    box-shadow: 0 8px 26px rgba(37,99,235,0.45) !important;
-}
-
-/* Google button */
-.g-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    width: 100%;
-    padding: 12px;
-    background: #ffffff;
-    border-radius: 11px;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: #1f2937;
-    cursor: pointer;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-    transition: all 0.18s;
-    border: none;
-}
-.g-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 18px rgba(0,0,0,0.3);
-}
-
-/* Divider */
-.or-row {
-    display: flex; align-items: center; gap: 10px;
-    margin: 4px 0 20px;
-}
-.or-line { flex: 1; height: 1px; background: #162033; }
-.or-text  { font-size: 0.72rem; color: #3d5280; letter-spacing: 0.06em; }
-
-/* Footer */
 .foot {
     text-align: center;
     font-size: 0.72rem;
     color: #1e2d4a;
     margin-top: 28px;
+}
+.debug-box {
+    background: #0d1424;
+    border: 1px solid #1a3060;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 0.78rem;
+    color: #7a9cc4;
+    margin-bottom: 12px;
+    font-family: monospace;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -186,16 +111,20 @@ if "authenticated" not in st.session_state:
 if "user" not in st.session_state:
     st.session_state["user"] = None
 
-# Already logged in → go straight to dashboard
 if st.session_state["authenticated"]:
     st.switch_page("pages/dashboard.py")
 
-# ── Google OAuth (optional) ───────────────────────────────────────────────────
-GOOGLE_CLIENT_ID     = os.environ.get("GOOGLE_CLIENT_ID", "")
-GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
-GOOGLE_REDIRECT_URI  = os.environ.get("GOOGLE_REDIRECT_URI", "http://localhost:8501")
+# ── Read credentials from secrets.toml ───────────────────────────────────────
+try:
+    GOOGLE_CLIENT_ID     = st.secrets["google"]["client_id"]
+    GOOGLE_CLIENT_SECRET = st.secrets["google"]["client_secret"]
+    GOOGLE_REDIRECT_URI  = st.secrets["google"]["redirect_uri"]
+    _creds_ok = True
+except Exception as e:
+    _creds_ok = False
+    _creds_error = str(e)
 
-_oauth_ready = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
+# ── OAuth library check ───────────────────────────────────────────────────────
 try:
     from streamlit_oauth import OAuth2Component
     _has_oauth = True
@@ -213,62 +142,79 @@ with col:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Google OAuth button ───────────────────────────────────────────────────
-    if _oauth_ready and _has_oauth:
-        oauth = OAuth2Component(
-            client_id=GOOGLE_CLIENT_ID,
-            client_secret=GOOGLE_CLIENT_SECRET,
-            authorize_endpoint="https://accounts.google.com/o/oauth2/v2/auth",
-            token_endpoint="https://oauth2.googleapis.com/token",
-            refresh_token_endpoint="https://oauth2.googleapis.com/token",
-            revoke_token_endpoint="https://oauth2.googleapis.com/revoke",
-        )
-        result = oauth.authorize_button(
-            name="Continue with Google",
-            redirect_uri=GOOGLE_REDIRECT_URI,
-            scope="openid email profile",
-            key="google_oauth",
-            extras_params={"prompt": "select_account"},
-            use_container_width=True,
-            icon="https://www.google.com/favicon.ico",
-        )
-        if result and result.get("token"):
-            import base64, json as _json
-            try:
-                id_token = result["token"].get("id_token", "")
-                payload  = id_token.split(".")[1]
-                payload += "=" * (-len(payload) % 4)
-                info     = _json.loads(base64.urlsafe_b64decode(payload))
-                st.session_state["authenticated"] = True
-                st.session_state["user"]          = info.get("email", "user")
-                st.switch_page("pages/dashboard.py")
-            except Exception:
-                st.error("Google sign-in failed. Please use the form below.")
+    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
 
+    # ── Show credential error ─────────────────────────────────────────────────
+    if not _creds_ok:
+        st.error(f"❌ Could not read secrets.toml: `{_creds_error}`")
         st.markdown("""
-        <div class="or-row">
-          <div class="or-line"></div>
-          <span class="or-text">OR</span>
-          <div class="or-line"></div>
-        </div>
-        """, unsafe_allow_html=True)
+        **Create the file** `.streamlit/secrets.toml` in your project folder:
+        ```toml
+        [google]
+        client_id     = "YOUR_CLIENT_ID.apps.googleusercontent.com"
+        client_secret = "GOCSPX-YOUR_SECRET"
+        redirect_uri  = "http://localhost:8501"
+        ```
+        Then **restart** Streamlit (Ctrl+C and rerun).
+        """)
+        st.stop()
 
-    # ── Credentials form ──────────────────────────────────────────────────────
-    with st.form("login_form"):
-        username  = st.text_input("Username", placeholder="nightswatch")
-        password  = st.text_input("Password", type="password", placeholder="••••••••")
-        submitted = st.form_submit_button("Sign in →", use_container_width=True)
+    if not _has_oauth:
+        st.error("❌ `streamlit-oauth` not installed.")
+        st.code('pip install streamlit-oauth', language="bash")
+        st.stop()
 
-        if submitted:
-            if username == "nightswatch" and password == "eclipse2024":
-                st.session_state["authenticated"] = True
-                st.session_state["user"]          = username
-                st.switch_page("pages/dashboard.py")
-            else:
-                st.error("Incorrect username or password.")
+    # ── Debug: confirm what was loaded (remove after testing) ─────────────────
+    # st.markdown(
+    #     f'<div class="debug-box">'
+    #     f'✅ Loaded client_id: <b>{GOOGLE_CLIENT_ID[:30]}...</b><br>'
+    #     f'✅ Secret length: <b>{len(GOOGLE_CLIENT_SECRET)} chars</b><br>'
+    #     f'✅ Redirect URI: <b>{GOOGLE_REDIRECT_URI}</b>'
+    #     f'</div>',
+    #     unsafe_allow_html=True,
+    # )
+
+    # ── Real OAuth button ─────────────────────────────────────────────────────
+    oauth = OAuth2Component(
+        client_id=GOOGLE_CLIENT_ID,
+        client_secret=GOOGLE_CLIENT_SECRET,
+        authorize_endpoint="https://accounts.google.com/o/oauth2/v2/auth",
+        token_endpoint="https://oauth2.googleapis.com/token",
+        refresh_token_endpoint="https://oauth2.googleapis.com/token",
+        revoke_token_endpoint="https://oauth2.googleapis.com/revoke",
+    )
+
+    result = oauth.authorize_button(
+        name="Continue with Google",
+        redirect_uri=GOOGLE_REDIRECT_URI,
+        scope="openid email profile",
+        key="google_oauth",
+        extras_params={"prompt": "select_account"},
+        use_container_width=True,
+        icon="https://www.google.com/favicon.ico",
+    )
+
+    if result and result.get("token"):
+        try:
+            id_token = result["token"].get("id_token", "")
+            payload  = id_token.split(".")[1]
+            payload += "=" * (-len(payload) % 4)
+            info = _json.loads(base64.urlsafe_b64decode(payload))
+
+            st.session_state["authenticated"] = True
+            st.session_state["user"]          = info.get("email", "user")
+            st.session_state["user_info"]     = {
+                "email":   info.get("email", ""),
+                "name":    info.get("name", ""),
+                "picture": info.get("picture", ""),
+            }
+            st.rerun()
+
+        except Exception as ex:
+            st.error(f"Token decode failed: {ex}")
 
     st.markdown("""
     <div class="foot">
-        nightswatch &nbsp;/&nbsp; eclipse2024
+        Sign in with any Google / Gmail account
     </div>
     """, unsafe_allow_html=True)
