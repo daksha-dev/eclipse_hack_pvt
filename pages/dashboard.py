@@ -39,6 +39,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Hide sidebar nav links
+st.markdown("""
+<style>
+[data-testid="stSidebarNav"] { display: none !important; }
+</style>
+""", unsafe_allow_html=True)
 
 # ═════════════════════════════════════════════════════════════════════════════
 #  Constants & colour palette
@@ -102,7 +108,7 @@ def get_device_name(device_id: str) -> str:
 # ═════════════════════════════════════════════════════════════════════════════
 
 def inject_custom_css() -> None:
-    """Inject custom styles for badges, cards, and layout polish."""
+    """Inject custom styles for badges, cards, layout polish, and notifications."""
     st.markdown("""
     <style>
     /* ── Global ─────────────────────────────────────── */
@@ -185,8 +191,416 @@ def inject_custom_css() -> None:
         font-size: 1.3rem;
         font-weight: 800;
     }
+
+    /* ── Notification bell wrapper ─────────────────── */
+    .bell-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        height: 100%;
+    }
+    .bell-btn-active {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: linear-gradient(135deg, #2a1a1a, #3a1f1f);
+        border: 1px solid #E74C3C66;
+        border-radius: 12px;
+        padding: 10px 16px;
+        cursor: pointer;
+        font-size: 1.5rem;
+        animation: bellPulse 1.6s ease-in-out infinite;
+    }
+    .bell-btn-quiet {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: linear-gradient(135deg, #1C1E26, #252830);
+        border: 1px solid #2A2D37;
+        border-radius: 12px;
+        padding: 10px 16px;
+        font-size: 1.5rem;
+        opacity: 0.6;
+    }
+    .bell-badge {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        background: #E74C3C;
+        color: #fff;
+        font-size: 0.65rem;
+        font-weight: 800;
+        min-width: 20px;
+        height: 20px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 4px;
+        border: 2px solid #0E1117;
+        animation: badgePop 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
+    }
+    .bell-label-active {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: #E74C3C;
+        letter-spacing: 0.5px;
+    }
+    .bell-label-quiet {
+        font-size: 0.8rem;
+        color: #555;
+        letter-spacing: 0.5px;
+    }
+    @keyframes bellPulse {
+        0%,100% { box-shadow: 0 0 0 0 rgba(231,76,60,0.0); }
+        40%      { box-shadow: 0 0 0 8px rgba(231,76,60,0.25); }
+        70%      { box-shadow: 0 0 0 14px rgba(231,76,60,0.08); }
+    }
+    @keyframes badgePop {
+        0%   { transform: scale(0); opacity: 0; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+
+    /* ── Notification panel ─────────────────────────── */
+    .notif-panel {
+        background: linear-gradient(160deg, #1a1d2a 0%, #1f2235 100%);
+        border: 1px solid #E74C3C44;
+        border-radius: 16px;
+        padding: 1.2rem 1.4rem;
+        margin-bottom: 1.2rem;
+        animation: slideDown 0.3s ease both;
+    }
+    .notif-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 1rem;
+    }
+    .notif-panel-title {
+        font-size: 1.05rem;
+        font-weight: 800;
+        color: #E74C3C;
+        letter-spacing: 0.5px;
+    }
+    .notif-panel-sub {
+        font-size: 0.78rem;
+        color: #8B8D97;
+        margin-top: 0.1rem;
+    }
+    .notif-item {
+        background: rgba(231,76,60,0.06);
+        border: 1px solid #E74C3C33;
+        border-left: 3px solid #E74C3C;
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.6rem;
+        transition: background 0.2s;
+    }
+    .notif-item:hover { background: rgba(231,76,60,0.12); }
+    .notif-item-critical {
+        border-left-color: #E74C3C;
+        background: rgba(231,76,60,0.08);
+    }
+    .notif-item-high {
+        border-left-color: #FF6B35;
+        border-color: #FF6B3533;
+        background: rgba(255,107,53,0.06);
+    }
+    .notif-item-warning {
+        border-left-color: #FFB81C;
+        border-color: #FFB81C33;
+        background: rgba(255,184,28,0.06);
+    }
+    .notif-device-name {
+        font-weight: 700;
+        font-size: 0.92rem;
+        color: #FAFAFA;
+    }
+    .notif-device-ip {
+        font-size: 0.72rem;
+        color: #8B8D97;
+        font-family: monospace;
+    }
+    .notif-signals {
+        font-size: 0.78rem;
+        color: #8B8D97;
+        margin-top: 0.25rem;
+    }
+    .notif-score {
+        font-size: 1.2rem;
+        font-weight: 800;
+    }
+    .notif-empty {
+        text-align: center;
+        padding: 1.5rem;
+        color: #00B050;
+        font-size: 1rem;
+    }
+    @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-12px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
     </style>
     """, unsafe_allow_html=True)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  Notification helpers
+# ═════════════════════════════════════════════════════════════════════════════
+
+def get_drift_notifications(results: Optional[dict]) -> List[Dict[str, Any]]:
+    """
+    Scan the latest window of every device and return a list of notification
+    dicts for any that currently have drift confirmed or a trust score < 70.
+    Sorted by severity (critical first).
+    """
+    if not results:
+        return []
+
+    notifications = []
+    devices = results.get("devices", {})
+
+    severity_order = {"CRITICAL": 0, "HIGH": 1, "WARNING": 2, "NORMAL": 3}
+
+    for dev_id, dev_data in devices.items():
+        history = dev_data.get("history", [])
+        if not history:
+            continue
+        last = history[-1]
+
+        drift_confirmed = last.get("drift_confirmed", False)
+        trust_score = last.get("trust_score", 100)
+        severity = last.get("severity", "NORMAL")
+
+        if not drift_confirmed and trust_score >= 70:
+            continue  # device is clean
+
+        # Build fired-signals list
+        signals_fired = []
+        if last.get("adwin_drift"):
+            signals_fired.append("ADWIN")
+        if last.get("chi_drift"):
+            signals_fired.append("Chi²")
+        if last.get("disagree_drift"):
+            signals_fired.append("Disagree")
+
+        # Count total drift windows across entire history
+        total_drift_windows = sum(1 for h in history if h.get("drift_confirmed"))
+
+        notifications.append({
+            "device_id": dev_id,
+            "device_name": get_device_name(dev_id),
+            "trust_score": trust_score,
+            "severity": severity,
+            "drift_confirmed": drift_confirmed,
+            "signals_fired": signals_fired,
+            "drift_factor": last.get("drift_factor", 1.0),
+            "anomaly_score": last.get("anomaly_score", 0.0),
+            "total_drift_windows": total_drift_windows,
+            "window": last.get("window", 0),
+        })
+
+    notifications.sort(key=lambda n: (severity_order.get(n["severity"], 9), n["trust_score"]))
+    return notifications
+
+
+def render_notification_bell(notifications: List[Dict[str, Any]]) -> None:
+    """
+    Render the notification bell icon in the header row.
+    A red pulsing bell with a badge count appears when drift is detected.
+    Clicking it toggles the notification panel below the header.
+    """
+    count = len(notifications)
+    has_alerts = count > 0
+
+    # Build bell HTML
+    if has_alerts:
+        bell_html = f"""
+        <div class="bell-wrapper">
+            <div class="bell-btn-active">
+                🔔
+                <span class="bell-badge">{count}</span>
+                <span class="bell-label-active">DRIFT DETECTED</span>
+            </div>
+        </div>
+        """
+    else:
+        bell_html = """
+        <div class="bell-wrapper">
+            <div class="bell-btn-quiet">
+                🔕
+                <span class="bell-label-quiet">All Clear</span>
+            </div>
+        </div>
+        """
+
+    st.markdown(bell_html, unsafe_allow_html=True)
+
+    # Toggle button (invisible label trick — we use a real st.button under the HTML)
+    btn_label = f"🔔 {count} Drift Alert{'s' if count != 1 else ''}" if has_alerts else "🔕 No Alerts"
+    if st.button(
+        btn_label,
+        key="notif_bell_toggle",
+        type="primary" if has_alerts else "secondary",
+        use_container_width=True,
+    ):
+        current = st.session_state.get("show_notifications", False)
+        st.session_state["show_notifications"] = not current
+
+
+def render_notification_panel(notifications: List[Dict[str, Any]]) -> None:
+    """
+    Render the expandable notification panel beneath the header.
+    Only shown when st.session_state['show_notifications'] is True.
+
+    Each element is rendered with its own st.markdown call to avoid
+    Streamlit silently dropping large HTML blocks.
+    """
+    if not st.session_state.get("show_notifications", False):
+        return
+
+    sev_colors = {
+        "CRITICAL": COLORS["critical"],
+        "HIGH":     COLORS["high"],
+        "WARNING":  COLORS["warning"],
+        "NORMAL":   COLORS["normal"],
+    }
+    sev_icons = {
+        "CRITICAL": "🔴", "HIGH": "🔶", "WARNING": "⚠️", "NORMAL": "✅",
+    }
+    border_colors = {
+        "CRITICAL": "#E74C3C",
+        "HIGH":     "#FF6B35",
+        "WARNING":  "#FFB81C",
+        "NORMAL":   "#00B050",
+    }
+    bg_colors = {
+        "CRITICAL": "rgba(231,76,60,0.07)",
+        "HIGH":     "rgba(255,107,53,0.07)",
+        "WARNING":  "rgba(255,184,28,0.06)",
+        "NORMAL":   "rgba(0,176,80,0.05)",
+    }
+
+    count = len(notifications)
+    ts = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
+
+    # ── Panel open wrapper ────────────────────────────────────────
+    st.markdown(
+        '<div class="notif-panel" style="padding-bottom:0.4rem;">',
+        unsafe_allow_html=True,
+    )
+
+    # ── Panel header ──────────────────────────────────────────────
+    if count == 0:
+        st.markdown(
+            f"""
+            <div class="notif-panel-header">
+                <div>
+                    <div class="notif-panel-title">🔔 Drift Notifications</div>
+                    <div class="notif-panel-sub">Last checked {ts}</div>
+                </div>
+            </div>
+            <div class="notif-empty">✅ No drift detected across all monitored devices.</div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    critical_count = sum(1 for n in notifications if n["severity"] == "CRITICAL")
+    high_count     = sum(1 for n in notifications if n["severity"] == "HIGH")
+    warning_count  = sum(1 for n in notifications if n["severity"] == "WARNING")
+
+    summary_parts = []
+    if critical_count:
+        summary_parts.append(
+            f'<span style="color:#E74C3C;font-weight:700;">{critical_count} critical</span>'
+        )
+    if high_count:
+        summary_parts.append(
+            f'<span style="color:#FF6B35;font-weight:700;">{high_count} high</span>'
+        )
+    if warning_count:
+        summary_parts.append(
+            f'<span style="color:#FFB81C;font-weight:700;">{warning_count} warning</span>'
+        )
+    summary_str = " · ".join(summary_parts)
+
+    st.markdown(
+        f"""
+        <div class="notif-panel-header">
+            <div>
+                <div class="notif-panel-title">
+                    🔔 {count} Drift Alert{"s" if count != 1 else ""}
+                </div>
+                <div class="notif-panel-sub">{summary_str} &nbsp;·&nbsp; {ts}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ── One st.markdown per notification item ─────────────────────
+    for n in notifications:
+        severity   = n["severity"]
+        color      = sev_colors.get(severity, COLORS["critical"])
+        icon       = sev_icons.get(severity, "❓")
+        border_clr = border_colors.get(severity, "#E74C3C")
+        bg_clr     = bg_colors.get(severity, "rgba(231,76,60,0.07)")
+
+        signals_str = (
+            " · ".join(f"<b>{s}</b>" for s in n["signals_fired"])
+            if n["signals_fired"] else "—"
+        )
+        drift_tag = (
+            '<span style="color:#E74C3C;font-weight:700;font-size:0.75rem;">● DRIFT</span>'
+            if n["drift_confirmed"] else
+            '<span style="color:#FFB81C;font-weight:700;font-size:0.75rem;">⚠ LOW TRUST</span>'
+        )
+
+        st.markdown(
+            f"""
+            <div style="
+                background:{bg_clr};
+                border:1px solid {border_clr}44;
+                border-left:3px solid {border_clr};
+                border-radius:10px;
+                padding:0.75rem 1rem;
+                margin-bottom:0.55rem;
+            ">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                    <div style="flex:1;min-width:0;">
+                        <span style="font-weight:700;font-size:0.92rem;color:#FAFAFA;">
+                            {icon} {n['device_name']}
+                        </span>
+                        &nbsp;{drift_tag}<br>
+                        <span style="font-size:0.72rem;color:#8B8D97;font-family:monospace;">
+                            {n['device_id']} · Window {n['window']}
+                        </span>
+                        <div style="font-size:0.78rem;color:#8B8D97;margin-top:0.25rem;">
+                            Signals: {signals_str} &nbsp;|&nbsp;
+                            Drift Factor: <b style="color:#FAFAFA;">{n['drift_factor']:.2f}x</b>
+                            &nbsp;|&nbsp;
+                            Anomaly: <b style="color:#FAFAFA;">{n['anomaly_score']:.3f}</b>
+                            &nbsp;|&nbsp;
+                            Drift windows: <b style="color:#FAFAFA;">{n['total_drift_windows']}</b>
+                        </div>
+                    </div>
+                    <div style="text-align:right;min-width:60px;padding-left:0.75rem;">
+                        <span style="font-size:1.2rem;font-weight:800;color:{color};">
+                            {n['trust_score']:.0f}
+                        </span>
+                        <div style="font-size:0.68rem;color:#8B8D97;">/ 100</div>
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # ── Panel close wrapper ───────────────────────────────────────
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -267,18 +681,30 @@ def get_device_history(results: dict, device_id: str) -> List[dict]:
 #  UI Component: Header
 # ═════════════════════════════════════════════════════════════════════════════
 
-def render_header() -> None:
-    """Render the dashboard header with title and timestamp."""
+def render_header(notifications: List[Dict[str, Any]]) -> None:
+    """Render the dashboard header with title, timestamp, and notification bell."""
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    st.markdown(f"""
-    <div class="dashboard-header">
-        <p class="dashboard-title">🔒 IoT Trust & Drift Analytics</p>
-        <p class="dashboard-subtitle">
-            Real-Time Device Trustworthiness Monitoring &nbsp;·&nbsp;
-            Dataset Replay Mode &nbsp;·&nbsp; {now}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+
+    # Two-column layout: title on left, bell on right
+    h_col_left, h_col_right = st.columns([5, 1])
+
+    with h_col_left:
+        st.markdown(f"""
+        <div class="dashboard-header">
+            <p class="dashboard-title">🔒 IoT Trust & Drift Analytics</p>
+            <p class="dashboard-subtitle">
+                Real-Time Device Trustworthiness Monitoring &nbsp;·&nbsp;
+                Dataset Replay Mode &nbsp;·&nbsp; {now}
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with h_col_right:
+        st.markdown("<div style='height:0.6rem;'></div>", unsafe_allow_html=True)
+        render_notification_bell(notifications)
+
+    # Notification panel spans full width, right below header
+    render_notification_panel(notifications)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -1303,12 +1729,23 @@ def main() -> None:
         st.session_state["show_detail"] = False
     if "show_evidence" not in st.session_state:
         st.session_state["show_evidence"] = False
+    if "show_notifications" not in st.session_state:
+        st.session_state["show_notifications"] = False
 
     # ── No data fallback ─────────────────────────────────────────
     if results is None:
         render_sidebar(config, None)
         render_no_data_page()
         return
+
+    # ── Build notifications early (needed for header) ────────────
+    notifications = get_drift_notifications(results)
+
+    # Auto-open the panel on first load if there are active alerts
+    if "notifications_auto_opened" not in st.session_state:
+        st.session_state["notifications_auto_opened"] = True
+        if notifications:
+            st.session_state["show_notifications"] = True
 
     # ── Sidebar ──────────────────────────────────────────────────
     selections = render_sidebar(config, results)
@@ -1323,8 +1760,8 @@ def main() -> None:
             if devices_data.get(d, {}).get("severity", "UNKNOWN") in severity_filter
         ]
 
-    # ── Header ───────────────────────────────────────────────────
-    render_header()
+    # ── Header (with notification bell) ─────────────────────────
+    render_header(notifications)
 
     # ── Metrics row ──────────────────────────────────────────────
     summary = results.get("summary", {})
