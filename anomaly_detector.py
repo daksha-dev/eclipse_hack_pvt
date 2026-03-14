@@ -186,6 +186,8 @@ class IsolationForestModel:
         self._norm_scale = float(negated.max() - negated.min())
         if self._norm_scale == 0:
             self._norm_scale = 1.0
+        if self._norm_scale < 0.1:
+            self._norm_scale = 0.5
 
         self._trained = True
 
