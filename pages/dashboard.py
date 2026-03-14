@@ -940,7 +940,7 @@ def render_device_detail(results: dict, device_id: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════
 
 def render_evidence_viewer(results: dict, device_id: str) -> None:
-    st.markdown(f"### 📄 Evidence Reports: `{device_id}`")
+    st.markdown(f"### 📄 Evidence Reports: `{get_device_name(device_id)}:{device_id}`")
     dev_history   = get_device_history(results, device_id)
     alert_windows = [h["window"] for h in dev_history if h.get("trust_score",100)<70]
     if not alert_windows:
