@@ -164,12 +164,18 @@ def get_drift_notifications(results: Optional[dict]) -> List[Dict[str, Any]]:
         drift     = last.get("drift_confirmed", False)
         score     = last.get("trust_score", 100)
         severity  = last.get("severity", "NORMAL")
-        if not drift and score >= 70:
+
+        # Include device if drift confirmed OR flatness detected
+        flatness = last.get("flatness_drift", False)
+        if not drift and not flatness and score >= 70:
             continue
+
         sigs = []
         if last.get("adwin_drift"):    sigs.append("ADWIN")
         if last.get("chi_drift"):      sigs.append("Chi²")
         if last.get("disagree_drift"): sigs.append("Disagree")
+        if last.get("flatness_drift"): sigs.append("🧊 Frozen Sensor")
+
         notifications.append({
             "device_id": dev_id,
             "device_name": get_device_name(dev_id),
@@ -568,7 +574,7 @@ def render_block_panel(notifications: List[Dict[str, Any]]) -> None:
 #  Data loading
 # ═══════════════════════════════════════════════════════════════════════
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=0)
 def load_results(path: str = "results.json") -> Optional[dict]:
     p = Path(path)
     if not p.exists():
@@ -845,7 +851,7 @@ def render_device_detail(results: dict, device_id: str) -> None:
     fig2.add_hline(y=0.15,line_dash="dash",line_color="#666",
         annotation_text="Threshold",annotation_font_color="#888")
     fig2.update_layout(title="Anomaly Scores",xaxis_title="Window",
-        yaxis_title="Score (0–1)",yaxis=dict(range=[0,1.05]),
+        yaxis_title="Score (0–1)",yaxis=dict(autorange=True, rangemode="tozero"),
         template="plotly_dark",paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",height=300,
         margin=dict(l=50,r=30,t=50,b=40),legend=dict(orientation="h",y=1.12))
@@ -875,10 +881,11 @@ def render_device_detail(results: dict, device_id: str) -> None:
 
     st.markdown("#### 🚦 Drift Signal Status (Latest Window)")
     last_h   = history[-1]
-    sig_cols = st.columns(3)
+    sig_cols = st.columns(4)
     for col,(label,key) in zip(sig_cols,[("ADWIN","adwin_drift"),
                                           ("Chi-Squared","chi_drift"),
-                                          ("Model Disagreement","disagree_drift")]):
+                                          ("Model Disagreement","disagree_drift"),
+                                          ("Frozen Sensor","flatness_drift")]):
         active = last_h.get(key,False)
         cls    = "signal-active" if active else "signal-inactive"
         icon   = "🔴" if active else "🟢"
@@ -1053,6 +1060,7 @@ def render_drift_overview(results: dict, selected_devices: List[str]) -> None:
             "ADWIN":           "🔴" if last.get("adwin_drift")    else "🟢",
             "Chi²":            "🔴" if last.get("chi_drift")      else "🟢",
             "Disagree":        "🔴" if last.get("disagree_drift") else "🟢",
+            "Frozen":          "🔴" if last.get("flatness_drift") else "🟢",
             "Drift Confirmed": "✅ Yes" if last.get("drift_confirmed") else "❌ No",
             "Drift Factor":    f"{last.get('drift_factor',1.0):.2f}",
             "Drift Windows":   f"{sum(1 for h in history if h.get('drift_confirmed'))}/{len(history)}",
@@ -1069,11 +1077,12 @@ def render_drift_events_timeline(results: dict, selected_devices: List[str]) -> 
     events  = []
     for dev_id in selected_devices:
         for h in devices.get(dev_id,{}).get("history",[]):
-            if h.get("drift_confirmed",False):
+            if h.get("drift_confirmed",False) or h.get("flatness_drift",False):
                 sigs = []
                 if h.get("adwin_drift"):    sigs.append("ADWIN")
                 if h.get("chi_drift"):      sigs.append("Chi²")
                 if h.get("disagree_drift"): sigs.append("Disagree")
+                if h.get("flatness_drift"): sigs.append("🧊 Frozen")
                 events.append({"Device":get_device_name(dev_id),"Window":h["window"],
                     "Trust Score":f"{h.get('trust_score',0):.1f}",
                     "Signals Fired":", ".join(sigs) or "None",
